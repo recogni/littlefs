@@ -25,6 +25,9 @@
 #include <string.h>
 #include <inttypes.h>
 
+#define LFS_NO_MALLOC
+#define LFS_NO_ASSERT
+
 #ifndef LFS_NO_MALLOC
 #include <stdlib.h>
 #endif
@@ -85,7 +88,14 @@ extern "C"
 #ifndef LFS_NO_ASSERT
 #define LFS_ASSERT(test) assert(test)
 #else
-#define LFS_ASSERT(test)
+#define assert(x)            \
+    if ((x) == 0)                 \
+    {                             \
+        __asm volatile("ebreak"); \
+        for (;;)                  \
+            ;                     \
+    }
+#define LFS_ASSERT(test) assert(test)
 #endif
 
 
@@ -211,8 +221,8 @@ static inline void *lfs_malloc(size_t size) {
 #ifndef LFS_NO_MALLOC
     return malloc(size);
 #else
-    (void)size;
-    return NULL;
+    extern void *pvPortMalloc( size_t xWantedSize );
+    return pvPortMalloc(size);
 #endif
 }
 
@@ -221,7 +231,8 @@ static inline void lfs_free(void *p) {
 #ifndef LFS_NO_MALLOC
     free(p);
 #else
-    (void)p;
+    extern void vPortFree( void *pv );
+    vPortFree(p);
 #endif
 }
 
