@@ -1,67 +1,35 @@
-TARGET = lfs.a
-ifneq ($(wildcard test.c main.c),)
-override TARGET = lfs
-endif
+#
+# Build lfs by cd'ing into it and creating a liblfs.a
+# that the rest of scorpio can link with.  This keeps 
+# CFLAGS, headers and the like seperate
+#
 
-CC ?= gcc
-AR ?= ar
-SIZE ?= size
+TOPDIR:=$(dir $(realpath $(lastword $(MAKEFILE_LIST))))/../..
 
-SRC += $(wildcard *.c bd/*.c)
-OBJ := $(SRC:.c=.o)
-DEP := $(SRC:.c=.d)
-ASM := $(SRC:.c=.s)
+include $(TOPDIR)/Makefile.rules
 
-ifdef DEBUG
-override CFLAGS += -O0 -g3
-else
-override CFLAGS += -Os
-endif
-ifdef WORD
-override CFLAGS += -m$(WORD)
-endif
-ifdef TRACE
-override CFLAGS += -DLFS_YES_TRACE
-endif
-override CFLAGS += -I.
-override CFLAGS += -std=c99 -Wall -pedantic
-override CFLAGS += -Wextra -Wshadow -Wjump-misses-init -Wundef
+TARGET := liblfs.a
 
-ifdef VERBOSE
-override TFLAGS += -v
-endif
+SRC := $(wildcard *.c)
+SRC += bd/lfs_rambd.c
+SRC += bd/lfs_sdhcibd.c
 
+OBJS := $(SRC:.c=.o)
 
-all: $(TARGET)
+CFLAGS := -fomit-frame-pointer -fno-strict-aliasing -fno-builtin  -mstrict-align -mcmodel=medany -g -ggdb 
+CFLAGS += -DLFS_NO_DEBUG -DLFS_NO_ERROR
+CFLAGS += -I. $(SDHCI_INCLUDES) $(FREERTOS_INCLUDES) -I$(TOPDIR)/src/common/include -I$(TOPDIR)/src/scpu/include -I$(TOPDIR)/src/scpu
+CFLAGS += -std=c99 -Wall -pedantic
+CFLAGS += -Wextra -Wshadow -Wjump-misses-init -Wundef
 
-asm: $(ASM)
+all: $(OBJS) $(TARGET)
 
-size: $(OBJ)
-	$(SIZE) -t $^
-
-test:
-	./scripts/test.py $(TFLAGS)
-.SECONDEXPANSION:
-test%: tests/test$$(firstword $$(subst \#, ,%)).toml
-	./scripts/test.py $@ $(TFLAGS)
-
--include $(DEP)
-
-lfs: $(OBJ)
-	$(CC) $(CFLAGS) $^ $(LFLAGS) -o $@
-
-%.a: $(OBJ)
+%.a: $(OBJS)
 	$(AR) rcs $@ $^
 
 %.o: %.c
-	$(CC) -c -MMD $(CFLAGS) $< -o $@
+	$(GCC) -c $(CFLAGS) -o $@ $<
 
-%.s: %.c
-	$(CC) -S $(CFLAGS) $< -o $@
-
-clean:
-	rm -f $(TARGET)
-	rm -f $(OBJ)
-	rm -f $(DEP)
-	rm -f $(ASM)
-	rm -f tests/*.toml.*
+.PHONY: clean1
+clean1:
+	rm -f $(TARGET) $(OBJS)
